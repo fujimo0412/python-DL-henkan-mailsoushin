@@ -2,13 +2,14 @@ import os
 import zipfile
 import datetime
 import subprocess
-import glob
+import time
 import win32com.client  # Outlook 送信用
 
-download_dir = r"C:\Users\user\Documents"
+download_dir = os.getenv("DOWNLOAD_DIR")
+if not download_dir:
+    raise EnvironmentError("環境変数 DOWNLOAD_DIR が設定されていません。")
 dataset = "vivek468/superstore-dataset-final"
 
-# 保存先フォルダ（固定）
 output_dir = os.path.join(download_dir, "KaggleData")
 os.makedirs(output_dir, exist_ok=True)
 
@@ -26,10 +27,10 @@ except Exception as e:
 
 # ===== 解凍・リネーム =====
 try:
-    zip_files = glob.glob(os.path.join(download_dir, "*.zip"))
-    if not zip_files:
-        raise FileNotFoundError("ZIPファイルが見つかりません。")
-    zip_path = zip_files[0]
+    dataset_name = dataset.split("/")[1]
+    zip_path = os.path.join(download_dir, f"{dataset_name}.zip")
+    if not os.path.exists(zip_path):
+        raise FileNotFoundError(f"ZIPファイルが見つかりません: {zip_path}")
 
     with zipfile.ZipFile(zip_path, "r") as z:
         extracted_files = z.namelist()
@@ -52,13 +53,20 @@ except Exception as e:
 
 # ===== メール送信 =====
 try:
-    my_email = os.getenv("MY_EMAIL")
+    my_email = os.getenv("MAIL_TO")
     if not my_email:
-        raise EnvironmentError("環境変数 MY_EMAIL が設定されていません。")
+        raise EnvironmentError("環境変数 MAIL_TO が設定されていません。")
 
     subprocess.Popen(["start", "outlook"], shell=True)
 
-    outlook = win32com.client.gencache.EnsureDispatch("Outlook.Application")
+    for _ in range(10):
+        try:
+            outlook = win32com.client.gencache.EnsureDispatch("Outlook.Application")
+            break
+        except Exception:
+            time.sleep(2)
+    else:
+        raise RuntimeError("Outlookの起動がタイムアウトしました。")
     mail = outlook.CreateItem(0)
 
     mail.To = my_email
